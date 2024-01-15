@@ -19,120 +19,73 @@ from pyrogram.errors import FloodWait, RPCError
 
 @Client.on_message(filters.private & filters.incoming & filters.text & (filters.command(BotCommands.Download) | filters.regex('^(ht|f)tp*')) & CustomFilters.auth_users)
 def _download(client, message):
+  if message.media:
+    return
+  sent_message = message.reply_text('🕵️**Checking link...**', quote=True)
+  link = message.command[1] if message.command else message.text
   user_id = message.from_user.id
-  if not message.media:
-    sent_message = message.reply_text('🕵️**Checking link...**', quote=True)
-    if message.command:
-      link = message.command[1]
-    else:
-      link = message.text
-    if 'drive.google.com' in link:
-      sent_message.edit(Messages.CLONING.format(link))
-      LOGGER.info(f'Copy:{user_id}: {link}')
-      msg = GoogleDrive(user_id).clone(link)
-      sent_message.edit(msg)
-    
-    if 'facebook' in link:
-      url = message.text
-      try:
-        r  = requests.post("https://yt1s.io/api/ajaxSearch/facebook", data={"q": url, "vt": "facebook"}).text
-        bs = BeautifulSoup(r, "html5lib")
+  if 'drive.google.com' in link:
+    sent_message.edit(Messages.CLONING.format(link))
+    LOGGER.info(f'Copy:{user_id}: {link}')
+    msg = GoogleDrive(user_id).clone(link)
+    sent_message.edit(msg)
 
-        js = str(bs).replace('<html><head></head><body>{"status":"ok","p":"facebook","links":', '').replace('</body></html>', '').replace('},', ',')
-        text_file = open(str(user_id) + "fb.txt", "w")
+  if 'facebook' in link:
+    url = message.text
+    try:
+      r  = requests.post("https://yt1s.io/api/ajaxSearch/facebook", data={"q": url, "vt": "facebook"}).text
+      bs = BeautifulSoup(r, "html5lib")
+
+      js = str(bs).replace('<html><head></head><body>{"status":"ok","p":"facebook","links":', '').replace('</body></html>', '').replace('},', ',')
+      with open(f"{str(user_id)}fb.txt", "w") as text_file:
         n = text_file.write(js)
-        text_file.close()
-        with open(str(user_id) + "fb.txt") as f:
-            contents = json.load(f)
-            try:
-              durl = str(contents['hd']).replace('&amp;', '&')
-              link = durl.strip()
-              filename = os.path.basename(link)
-              dl_path = DOWNLOAD_DIRECTORY
-              LOGGER.info(f'Download:{user_id}: {link}')
-              sent_message.edit(Messages.DOWNLOADING.format(link))
-              result, file_path = download_file(link, dl_path)
+      with open(f"{str(user_id)}fb.txt") as f:
+        contents = json.load(f)
+        try:
+          durl = str(contents['hd']).replace('&amp;', '&')
+          link = durl.strip()
+          filename = os.path.basename(link)
+          dl_path = DOWNLOAD_DIRECTORY
+          LOGGER.info(f'Download:{user_id}: {link}')
+          sent_message.edit(Messages.DOWNLOADING.format(link))
+          result, file_path = download_file(link, dl_path)
 
-              if os.path.exists(file_path):
-                sent_message.edit(Messages.DOWNLOADED_SUCCESSFULLY.format(os.path.basename(file_path), humanbytes(os.path.getsize(file_path))))
-                msg = GoogleDrive(user_id).upload_file(file_path)
-                sent_message.edit(msg)
-                LOGGER.info(f'Deleteing: {file_path}')
-                os.remove(file_path)  
-            except:
-              durl = str(contents['sd']).replace('&amp;', '&')
-              link = durl.strip()
-              filename = os.path.basename(link)
-              dl_path = DOWNLOAD_DIRECTORY
-              LOGGER.info(f'Download:{user_id}: {link}')
-              sent_message.edit(Messages.DOWNLOADING.format(link))
-              result, file_path = download_file(link, dl_path)
+          if os.path.exists(file_path):
+            sent_message.edit(Messages.DOWNLOADED_SUCCESSFULLY.format(os.path.basename(file_path), humanbytes(os.path.getsize(file_path))))
+            msg = GoogleDrive(user_id).upload_file(file_path)
+            sent_message.edit(msg)
+            LOGGER.info(f'Deleteing: {file_path}')
+            os.remove(file_path)  
+        except:
+          durl = str(contents['sd']).replace('&amp;', '&')
+          link = durl.strip()
+          filename = os.path.basename(link)
+          dl_path = DOWNLOAD_DIRECTORY
+          LOGGER.info(f'Download:{user_id}: {link}')
+          sent_message.edit(Messages.DOWNLOADING.format(link))
+          result, file_path = download_file(link, dl_path)
 
-              if os.path.exists(file_path):
-                sent_message.edit(Messages.DOWNLOADED_SUCCESSFULLY.format(os.path.basename(file_path), humanbytes(os.path.getsize(file_path))))
-                msg = GoogleDrive(user_id).upload_file(file_path)
-                sent_message.edit(msg)
-                LOGGER.info(f'Deleteing: {file_path}')
-                os.remove(file_path)  
-        
-        
-      except:
-        sent_message = message.reply_text('🕵️**Your Facebook Link is Private & SO I Cannot Download**', quote=True)
-        
-   
-    if 'solidfiles' in link:
-      url = message.text
-      headers = {
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_4) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/36.0.1985.125 Safari/537.36'
-        }
-      try:
-        pageSource = requests.get(url, headers = headers).text
-        mainOptions = str(re.search(r'viewerOptions\'\,\ (.*?)\)\;', pageSource).group(1))
-        dl_url = json.loads(mainOptions)["downloadUrl"]
-        link = dl_url.strip()
-        filename = os.path.basename(link)
-        dl_path = DOWNLOAD_DIRECTORY
-        LOGGER.info(f'Download:{user_id}: {link}')
-        sent_message.edit(Messages.DOWNLOADING.format(link))
-        result, file_path = download_file(link, dl_path)
-        if os.path.exists(file_path):
-          sent_message.edit(Messages.DOWNLOADED_SUCCESSFULLY.format(os.path.basename(file_path), humanbytes(os.path.getsize(file_path))))
-          msg = GoogleDrive(user_id).upload_file(file_path)
-          sent_message.edit(msg)
-          LOGGER.info(f'Deleteing: {file_path}')
-          os.remove(file_path)
-      except:
-        sent_message = message.reply_text('🕵️**Solidfiles link error...**', quote=True)
-    
-    if 'anonfiles' in link:
-      url = message.text
-      try:
-        bypasser = lk21.Bypass()
-        dl_url=bypasser.bypass_anonfiles(url)
-        link = dl_url.strip()
-        filename = os.path.basename(link)
-        dl_path = DOWNLOAD_DIRECTORY
-        LOGGER.info(f'Download:{user_id}: {link}')
-        sent_message.edit(Messages.DOWNLOADING.format(link))
-        result, file_path = download_file(link, dl_path)
-        if os.path.exists(file_path):
-          sent_message.edit(Messages.DOWNLOADED_SUCCESSFULLY.format(os.path.basename(file_path), humanbytes(os.path.getsize(file_path))))
-          msg = GoogleDrive(user_id).upload_file(file_path)
-          sent_message.edit(msg)
-          LOGGER.info(f'Deleteing: {file_path}')
-          os.remove(file_path)
-      except:
-        sent_message = message.reply_text('🕵️**Anonfiles link error...**', quote=True)
-      
-    if 'mediafire.com' in link:
-      url = message.text
-      try:
-        link = re.findall(r'\bhttps?://.*mediafire\.com\S+', url)[0]
-      except IndexError:
-        sent_message = message.reply_text('🕵️**mediafire link error...**', quote=True)
-      page = BeautifulSoup(requests.get(link).content, 'lxml')
-      info = page.find('a', {'aria-label': 'Download file'})
-      dl_url = info.get('href')
+          if os.path.exists(file_path):
+            sent_message.edit(Messages.DOWNLOADED_SUCCESSFULLY.format(os.path.basename(file_path), humanbytes(os.path.getsize(file_path))))
+            msg = GoogleDrive(user_id).upload_file(file_path)
+            sent_message.edit(msg)
+            LOGGER.info(f'Deleteing: {file_path}')
+            os.remove(file_path)  
+
+
+    except:
+      sent_message = message.reply_text('🕵️**Your Facebook Link is Private & SO I Cannot Download**', quote=True)
+
+
+  if 'solidfiles' in link:
+    url = message.text
+    headers = {
+      'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_4) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/36.0.1985.125 Safari/537.36'
+      }
+    try:
+      pageSource = requests.get(url, headers = headers).text
+      mainOptions = str(re.search(r'viewerOptions\'\,\ (.*?)\)\;', pageSource).group(1))
+      dl_url = json.loads(mainOptions)["downloadUrl"]
       link = dl_url.strip()
       filename = os.path.basename(link)
       dl_path = DOWNLOAD_DIRECTORY
@@ -145,71 +98,115 @@ def _download(client, message):
         sent_message.edit(msg)
         LOGGER.info(f'Deleteing: {file_path}')
         os.remove(file_path)
-      else:
-        sent_message = message.reply_text('🕵️**mediafire link error...**', quote=True)
-    if 'zippyshare.com' in link:
-      url = message.text
-      dl_url = ''
-      try:
-        link = re.findall(r'\bhttps?://.*zippyshare\.com\S+', url)[0]
-      except IndexError:
-        sent_message = message.reply_text('🕵️**zippy link error...**', quote=True)
-      session = requests.Session()
-      base_url = re.search('http.+.com', link).group()
-      response = session.get(link)
-      page_soup = BeautifulSoup(response.content, "lxml")
-      scripts = page_soup.find_all("script", {"type": "text/javascript"})
-      for script in scripts:
-        if "getElementById('dlbutton')" in script.text:
-          url_raw = re.search(r'= (?P<url>\".+\" \+ (?P<math>\(.+\)) .+);',
-                              script.text).group('url')
-          math = re.search(r'= (?P<url>\".+\" \+ (?P<math>\(.+\)) .+);',
-                           script.text).group('math')
-          dl_url = url_raw.replace(math, '"' + str(eval(math)) + '"')
-          break
-      dl_url = base_url + eval(dl_url)
+    except:
+      sent_message = message.reply_text('🕵️**Solidfiles link error...**', quote=True)
+
+  if 'anonfiles' in link:
+    url = message.text
+    try:
+      bypasser = lk21.Bypass()
+      dl_url=bypasser.bypass_anonfiles(url)
       link = dl_url.strip()
-      filename = urllib.parse.unquote(dl_url.split('/')[-1])
+      filename = os.path.basename(link)
       dl_path = DOWNLOAD_DIRECTORY
       LOGGER.info(f'Download:{user_id}: {link}')
       sent_message.edit(Messages.DOWNLOADING.format(link))
       result, file_path = download_file(link, dl_path)
       if os.path.exists(file_path):
-        sent_message.edit(Messages.DOWNLOADED_SUCCESSFULLY.format(os.path.basename(file_path),
-                                                                  humanbytes(os.path.getsize(file_path))))
+        sent_message.edit(Messages.DOWNLOADED_SUCCESSFULLY.format(os.path.basename(file_path), humanbytes(os.path.getsize(file_path))))
         msg = GoogleDrive(user_id).upload_file(file_path)
         sent_message.edit(msg)
         LOGGER.info(f'Deleteing: {file_path}')
         os.remove(file_path)
-      else:
-        sent_message = message.reply_text('🕵️** zippy link error...**', quote=True)
+    except:
+      sent_message = message.reply_text('🕵️**Anonfiles link error...**', quote=True)
 
-    if 'pornhub.com' in link:
-      link = message.text
-      LOGGER.info(f'YTDL:{user_id}: {link}')
-      sent_message.edit(Messages.DOWNLOADING.format(link))
-      result, file_path = utube_dl(link)
-      if result:
-        sent_message.edit(Messages.DOWNLOADED_SUCCESSFULLY.format(os.path.basename(file_path), humanbytes(os.path.getsize(file_path))))
-        msg = GoogleDrive(user_id).upload_file(file_path)
-        sent_message.edit(msg)
-        LOGGER.info(f'Deleteing: {file_path}')
-        os.remove(file_path)
-      else:
-        sent_message = message.reply_text('🕵️**PornHub Error**', quote=True)
-    if 'youtu' in link:
-      link = message.text
-      LOGGER.info(f'YTDL:{user_id}: {link}')
-      sent_message.edit(Messages.DOWNLOADING.format(link))
-      result, file_path = utube_dl(link)
-      if result:
-        sent_message.edit(Messages.DOWNLOADED_SUCCESSFULLY.format(os.path.basename(file_path), humanbytes(os.path.getsize(file_path))))
-        msg = GoogleDrive(user_id).upload_file(file_path)
-        sent_message.edit(msg)
-        LOGGER.info(f'Deleteing: {file_path}')
-        os.remove(file_path)
-      else:
-        sent_message = message.reply_text('🕵️**PornHub Error**', quote=True)
+  if 'mediafire.com' in link:
+    url = message.text
+    try:
+      link = re.findall(r'\bhttps?://.*mediafire\.com\S+', url)[0]
+    except IndexError:
+      sent_message = message.reply_text('🕵️**mediafire link error...**', quote=True)
+    page = BeautifulSoup(requests.get(link).content, 'lxml')
+    info = page.find('a', {'aria-label': 'Download file'})
+    dl_url = info.get('href')
+    link = dl_url.strip()
+    filename = os.path.basename(link)
+    dl_path = DOWNLOAD_DIRECTORY
+    LOGGER.info(f'Download:{user_id}: {link}')
+    sent_message.edit(Messages.DOWNLOADING.format(link))
+    result, file_path = download_file(link, dl_path)
+    if os.path.exists(file_path):
+      sent_message.edit(Messages.DOWNLOADED_SUCCESSFULLY.format(os.path.basename(file_path), humanbytes(os.path.getsize(file_path))))
+      msg = GoogleDrive(user_id).upload_file(file_path)
+      sent_message.edit(msg)
+      LOGGER.info(f'Deleteing: {file_path}')
+      os.remove(file_path)
+    else:
+      sent_message = message.reply_text('🕵️**mediafire link error...**', quote=True)
+  if 'zippyshare.com' in link:
+    url = message.text
+    dl_url = ''
+    try:
+      link = re.findall(r'\bhttps?://.*zippyshare\.com\S+', url)[0]
+    except IndexError:
+      sent_message = message.reply_text('🕵️**zippy link error...**', quote=True)
+    session = requests.Session()
+    base_url = re.search('http.+.com', link).group()
+    response = session.get(link)
+    page_soup = BeautifulSoup(response.content, "lxml")
+    scripts = page_soup.find_all("script", {"type": "text/javascript"})
+    for script in scripts:
+      if "getElementById('dlbutton')" in script.text:
+        url_raw = re.search(r'= (?P<url>\".+\" \+ (?P<math>\(.+\)) .+);',
+                            script.text).group('url')
+        math = re.search(r'= (?P<url>\".+\" \+ (?P<math>\(.+\)) .+);',
+                         script.text).group('math')
+        dl_url = url_raw.replace(math, f'"{str(eval(math))}"')
+        break
+    dl_url = base_url + eval(dl_url)
+    link = dl_url.strip()
+    filename = urllib.parse.unquote(dl_url.split('/')[-1])
+    dl_path = DOWNLOAD_DIRECTORY
+    LOGGER.info(f'Download:{user_id}: {link}')
+    sent_message.edit(Messages.DOWNLOADING.format(link))
+    result, file_path = download_file(link, dl_path)
+    if os.path.exists(file_path):
+      sent_message.edit(Messages.DOWNLOADED_SUCCESSFULLY.format(os.path.basename(file_path),
+                                                                humanbytes(os.path.getsize(file_path))))
+      msg = GoogleDrive(user_id).upload_file(file_path)
+      sent_message.edit(msg)
+      LOGGER.info(f'Deleteing: {file_path}')
+      os.remove(file_path)
+    else:
+      sent_message = message.reply_text('🕵️** zippy link error...**', quote=True)
+
+  if 'pornhub.com' in link:
+    link = message.text
+    LOGGER.info(f'YTDL:{user_id}: {link}')
+    sent_message.edit(Messages.DOWNLOADING.format(link))
+    result, file_path = utube_dl(link)
+    if result:
+      sent_message.edit(Messages.DOWNLOADED_SUCCESSFULLY.format(os.path.basename(file_path), humanbytes(os.path.getsize(file_path))))
+      msg = GoogleDrive(user_id).upload_file(file_path)
+      sent_message.edit(msg)
+      LOGGER.info(f'Deleteing: {file_path}')
+      os.remove(file_path)
+    else:
+      sent_message = message.reply_text('🕵️**PornHub Error**', quote=True)
+  if 'youtu' in link:
+    link = message.text
+    LOGGER.info(f'YTDL:{user_id}: {link}')
+    sent_message.edit(Messages.DOWNLOADING.format(link))
+    result, file_path = utube_dl(link)
+    if result:
+      sent_message.edit(Messages.DOWNLOADED_SUCCESSFULLY.format(os.path.basename(file_path), humanbytes(os.path.getsize(file_path))))
+      msg = GoogleDrive(user_id).upload_file(file_path)
+      sent_message.edit(msg)
+      LOGGER.info(f'Deleteing: {file_path}')
+      os.remove(file_path)
+    else:
+      sent_message = message.reply_text('🕵️**PornHub Error**', quote=True)
     
     
    
@@ -242,10 +239,10 @@ def _telegram_file(client, message):
 
 @Client.on_message(filters.incoming & filters.private & filters.command(BotCommands.YtDl) & CustomFilters.auth_users)
 def _ytdl(client, message):
-  user_id = message.from_user.id
   if len(message.command) > 1:
     sent_message = message.reply_text('🕵️**Checking Link...**', quote=True)
     link = message.command[1]
+    user_id = message.from_user.id
     LOGGER.info(f'YTDL:{user_id}: {link}')
     sent_message.edit(Messages.DOWNLOADING.format(link))
     result, file_path = utube_dl(link)
